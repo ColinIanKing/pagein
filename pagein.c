@@ -51,6 +51,10 @@ static size_t get_pagesize(void)
 	return page_size;
 }
 
+/*
+ *  get_memstats()
+ *	get some pertinent memory statistics from /proc/meminfo
+ */
 static int get_memstats(int64_t *memfree, int64_t *swapfree)
 {
 	FILE *fp;
@@ -82,6 +86,10 @@ static int get_memstats(int64_t *memfree, int64_t *swapfree)
 	return 0;
 }
 
+/*
+ *  show_help()
+ *	show command help info
+ */
 static void show_help(void)
 {
 	printf(APP_NAME ":\n");
@@ -94,6 +102,10 @@ static void show_help(void)
 
 }
 
+/*
+ *  pagein_proc()
+ *	try to force page in pages for a specific process
+ */
 static int pagein_proc(
 	const pid_t pid,
 	const int64_t swapfree_begin,
@@ -137,9 +149,8 @@ static int pagein_proc(
 		for (off = begin; off < end; off += page_size, pages++) {
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
 				continue;
-			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte)) {
+			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte))
 				pages_touched++;
-			}
 		}
 		ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		if (!get_memstats(&memfree, &swapfree) &&
@@ -168,6 +179,10 @@ static int pagein_proc(
 	return 0;
 }
 
+/*
+ *  pagein_all_procs()
+ *	attempt to page in all processes
+ */
 static int pagein_all_procs(
 	const int64_t swapfree_begin,	
 	int32_t *const procs,
