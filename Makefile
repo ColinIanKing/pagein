@@ -32,12 +32,12 @@ endif
 export DEB_BUILD_HARDENING=1
 
 BINDIR=/usr/bin
-MANDIR=/usr/share/man/man8
+MANDIR=/usr/share/man/man1
 
 pagein: pagein.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
-pagein.8.gz: pagein.8
+pagein.1.gz: pagein.1
 	gzip -c $< > $@
 
 dist:
