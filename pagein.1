@@ -1,0 +1,76 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.\" First parameter, NAME, should be all caps
+.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
+.\" other parameters are allowed: see man(7), man(1)
+.TH PAGEIN 1 "9 January, 2017"
+.\" Please adjust this date whenever revising the manpage.
+.\"
+.\" Some roff macros, for reference:
+.\" .nh        disable hyphenation
+.\" .hy        enable hyphenation
+.\" .ad l      left justify
+.\" .ad b      justify to both left and right margins
+.\" .nf        disable filling
+.\" .fi        enable filling
+.\" .br        insert line break
+.\" .sp <n>    insert n+1 empty lines
+.\" for manpage-specific macros, see man(7)
+.SH NAME
+pagein \- a tool to force swapped out pages back into memory
+.br
+
+.SH SYNOPSIS
+.B pagein
+.RI [ \-a ]
+.RI [ \-h ]
+.RI [ \-v ]
+.RI [ \-p\ pid ]
+.br
+
+.SH DESCRIPTION
+Pagein is a tool that forces pages that are in swap to be paged in back
+to memory.  The main usecase for pagein is to exercise the VM and swap
+subsystems for testing purposes.
+
+.SH OPTIONS
+pagein options are as follow:
+.TP
+.B \-a
+try to page in all processes. This needs to be run with root privilege to
+allow pagein to access all the processes. Cannot be used with the \-p
+option.
+.TP
+.B \-h
+show help information.
+.TP
+.B \-p pid
+page in process with process ID pid. Cannot be used with the \-a option.
+Processes not owned by the user need to be paged in by running page in
+with root privilege.
+.TP
+.B \-v
+verbose mode, shows progress and paging in statistics, useful with the
+\-a option.
+.SH EXAMPLES
+.LP
+Page in all processes and show progress:
+.RS 8
+sudo pagein \-a \-v
+.RE
+.LP
+Page in the compiz process:
+.RS 8
+sudo pagein \-p $(pidof compiz)
+.RE
+.SH SEE ALSO
+.BR free (1)
+.SH AUTHOR
+pagein was written by Colin King <colin.king@canonical.com>
+.PP
+This manual page was written by Colin King <colin.king@canonical.com>,
+for the Ubuntu project (but may be used by others).
+.SH COPYRIGHT
+Copyright \(co 2016-2017 Canonical Ltd.
+.br
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
