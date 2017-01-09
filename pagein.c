@@ -22,6 +22,7 @@
 #define OPT_VERBOSE		(0x00000001)
 #define OPT_ALL			(0x00000002)
 #define OPT_BY_PID		(0x00000004)
+#define OPT_TRACE_ATTACH	(0x00000008)
 
 #define GOT_MEMFREE		(0x01)
 #define GOT_SWAPFREE		(0x02)
@@ -96,8 +97,9 @@ static void show_help(void)
 	printf("Usage: " APP_NAME " [OPTION [ARG]]\n");
 	printf("-a\tpage in pages in all processes\n");
 	printf("-h\tshow help\n");
-	printf("-v\tverbose mode\n");
 	printf("-p pid\tpull in pages on specified process\n");
+	printf("-t\tattach/detatch using ptrace each process being paged in\n");
+	printf("-v\tverbose mode\n");
 	printf("Note: to page in all processes, run with root privilege\n");
 
 }
@@ -144,15 +146,19 @@ static int pagein_proc(
 			continue;
 
 		has_maps = true;
-		ptrace(PTRACE_ATTACH, pid, NULL, NULL);
-		waitpid(pid, NULL, 0);
+		if (opt_flags & OPT_TRACE_ATTACH) {
+			(void)ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+			(void)waitpid(pid, NULL, 0);
+		}
 		for (off = begin; off < end; off += page_size, pages++) {
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
 				continue;
 			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte))
 				pages_touched++;
 		}
-		ptrace(PTRACE_DETACH, pid, NULL, NULL);
+		if (opt_flags & OPT_TRACE_ATTACH) {
+			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
+		}
 		if (!get_memstats(&memfree, &swapfree) &&
 		    swapfree < swapfree_begin) {
 			break;
@@ -223,7 +229,7 @@ int main(int argc, char **argv)
 	pid_t pid = -1;
 
 	for (;;) {
-		int c = getopt(argc, argv, "adhp:v");
+		int c = getopt(argc, argv, "adhp:tv");
 		if (c == -1)
 			break;
 
@@ -242,6 +248,9 @@ int main(int argc, char **argv)
 				fprintf(stderr, "bad pid: %d\n", pid);
 				exit(EXIT_FAILURE);	
 			}
+			break;
+		case 't':
+			opt_flags |= OPT_TRACE_ATTACH;
 			break;
 		case 'v':
 			opt_flags |= OPT_VERBOSE;
