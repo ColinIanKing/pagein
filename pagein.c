@@ -51,7 +51,7 @@ static size_t get_pagesize(void)
 	return page_size;
 }
 
-static int get_memstats(uint64_t *memfree, uint64_t *swapfree)
+static int get_memstats(int64_t *memfree, int64_t *swapfree)
 {
 	FILE *fp;
 	char buffer[4096];
@@ -96,9 +96,9 @@ static void show_help(void)
 
 static int pagein_proc(
 	const pid_t pid,
-	const uint64_t swapfree_begin,
-	uint32_t *const procs,
-	uint64_t *const total_pages_touched)
+	const int64_t swapfree_begin,
+	int32_t *const procs,
+	int64_t *const total_pages_touched)
 {
 	char path[PATH_MAX];
 	char buffer[4096];
@@ -125,7 +125,7 @@ static int pagein_proc(
 	 * Look for field 0060b000-0060c000 r--p 0000b000 08:01 1901726
 	 */
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
-		uint64_t memfree, swapfree;
+		int64_t memfree, swapfree;
 		off_t off;
 		uint8_t byte;
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64, &begin, &end) != 2)
@@ -170,9 +170,9 @@ static int pagein_proc(
 
 static int pagein_all_procs(
 	const int64_t swapfree_begin,	
-	uint32_t *const procs,
-	uint32_t *const total_procs,
-	uint64_t *const total_pages_touched)
+	int32_t *const procs,
+	int32_t *const total_procs,
+	int64_t *const total_pages_touched)
 {
 	DIR *dp;
 	struct dirent *d;
@@ -200,10 +200,10 @@ static int pagein_all_procs(
 
 int main(int argc, char **argv)
 {
-	uint64_t memfree_begin, memfree_end;
-	uint64_t swapfree_begin, swapfree_end;
-	uint64_t total_pages_touched = 0ULL;
-	uint32_t procs, total_procs = 0;
+	int64_t memfree_begin, memfree_end;
+	int64_t swapfree_begin, swapfree_end;
+	int64_t total_pages_touched = 0ULL;
+	int32_t procs, total_procs = 0;
 	struct rusage usage;
 	pid_t pid = -1;
 
