@@ -1,0 +1,18 @@
+name: pagein
+version: 0.00.00-20170109-1-5-a404278
+summary: tool to force swapped out pages back into memory
+description: Pagein is a tool that forces pages that are in swap to be paged in back to memory.  The main usecase for pagein is to exercise the VM and swap subsystems for testing purposes.
+confinement: devmode
+
+parts:
+    pagein:
+        plugin: make
+        source: ..
+        build-packages:
+            - gcc
+            - make
+
+apps:
+    pagein:
+        command: usr/bin/pagein
+
