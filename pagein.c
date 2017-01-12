@@ -216,8 +216,6 @@ static int pagein_all_procs(
 	DIR *dp;
 	struct dirent *d;
 
-	*procs = 0;
-
 	dp = opendir("/proc");
 	if (!dp)
 		return -1;
@@ -242,7 +240,7 @@ int main(int argc, char **argv)
 	int64_t memfree_begin, memfree_end;
 	int64_t swapfree_begin, swapfree_end;
 	int64_t total_pages_touched = 0ULL;
-	int32_t procs, total_procs = 0;
+	int32_t procs = 0, total_procs = 0;
 	struct rusage usage;
 	pid_t pid = -1;
 
