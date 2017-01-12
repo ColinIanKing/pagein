@@ -162,6 +162,8 @@ static int pagein_proc(
 		uint8_t byte;
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64, &begin, &end) != 2)
 			continue;
+		if (begin >= end)
+			continue;
 
 		has_maps = true;
 		if (opt_flags & OPT_TRACE_ATTACH) {
