@@ -243,7 +243,8 @@ int main(int argc, char **argv)
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
 	int32_t procs = 0, total_procs = 0;
-	const int page_size = get_page_size();
+	const int32_t page_size = get_page_size();
+	const int32_t scale = page_size / 1024;
 	struct rusage usage;
 	pid_t pid = -1;
 
@@ -311,17 +312,17 @@ int main(int argc, char **argv)
 		printf("%-60.60s\r", "");
 
 	if (opt_flags & OPT_ALL)
-		printf("Processes Touched:    %" PRIu32 " (out of %" PRIu32 ")\n", procs, total_procs);
-	printf("Pages Touched:        %" PRIu64 "\n", total_pages_touched);
+		printf("Processes touched:    %" PRIu32 " (out of %" PRIu32 ")\n", procs, total_procs);
+	printf("Pages touched:        %" PRIu64 "\n", total_pages_touched);
 	delta = memfree_begin - memfree_end;
-	printf("Free Memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
-		delta, (delta / page_size) * 1024);
+	printf("Free memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
+		delta, delta / scale);
 	delta = swapfree_begin - swapfree_end;
-	printf("Swap Memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
-		delta, (delta / page_size) * 1024);
+	printf("Swap memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
+		delta, delta / scale);
 	if (getrusage(RUSAGE_SELF, &usage) == 0) {
-		printf("Page Faults Major:    %lu\n", usage.ru_majflt);
-		printf("Page Faults Minor:    %lu\n", usage.ru_minflt);
+		printf("Page faults major:    %lu\n", usage.ru_majflt);
+		printf("Page faults minor:    %lu\n", usage.ru_minflt);
 		printf("Swaps:                %lu\n", usage.ru_nswap);
 	}
 
