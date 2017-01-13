@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <sys/ptrace.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -47,6 +48,13 @@
 #define GOT_ALL			(GOT_MEMFREE | GOT_SWAPFREE)
 
 static uint16_t		opt_flags = 0;
+
+typedef struct mapping {
+	uint64_t	begin;
+	uint64_t	end;
+	char		*path;
+	struct mapping *next;
+} mapping_t;
 
 /*
  *  get_page_size()
@@ -119,10 +127,90 @@ static void show_help(void)
 }
 
 /*
+ *  free_pagein_mappings()
+ *	free mappings information
+ */
+static void free_pagein_mappings(mapping_t *mappings)
+{
+	mapping_t *mapping, *next = NULL;
+
+	for (mapping = mappings; mapping; mapping = next) {
+		next = mapping->next;
+
+		free(mapping->path);
+		free(mapping);
+	}
+}
+
+/*
+ *  get_pagein_mappings()
+ *	get all the mappings that pagein uses
+ */
+static mapping_t *get_pagein_mappings(void)
+{
+	FILE *fpmap;
+	mapping_t *mappings = NULL;
+	char buffer[4096];
+
+	fpmap = fopen("/proc/self/maps", "r");
+	if (!fpmap)
+		return NULL;
+
+	while (fgets(buffer, sizeof(buffer), fpmap)) {
+		mapping_t *mapping;
+		uint64_t begin, end;
+		char path[1024];
+
+		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64 " %*s %*x %*x:%*x %*d %1023s", &begin, &end, path) != 3)
+			continue;
+		if ((begin >= end) || (begin == end))
+			continue;
+
+		mapping = malloc(sizeof(*mapping));
+		if (!mapping)
+			goto nomem;
+
+		mapping->path = strdup(path);
+		if (!mapping->path) {
+			free(mapping);
+			goto nomem;
+		}
+
+		mapping->begin = begin;
+		mapping->end = end;
+		mapping->next = mappings;
+		mappings = mapping;
+	}
+	(void)fclose(fpmap);
+	return mappings;
+
+nomem:
+	(void)fclose(fpmap);
+	free_pagein_mappings(mappings);
+	return NULL;
+}
+
+bool not_in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
+{
+	const mapping_t *mapping;
+
+	for (mapping = mappings; mapping; mapping = mapping->next) {
+		if (!strcmp(mapping->path, path))
+			return false;
+		if ((begin < mapping->begin && end < mapping->begin) ||
+		    (begin > mapping->end   && end > mapping->end))
+			continue;
+		return false;
+	}
+	return true;
+}
+
+/*
  *  pagein_proc()
  *	try to force page in pages for a specific process
  */
 static int pagein_proc(
+	const mapping_t *mappings,
 	const int32_t page_size,
 	const pid_t pid,
 	int32_t *const procs,
@@ -133,9 +221,12 @@ static int pagein_proc(
 	char buffer[4096];
 	int fdmem;
 	FILE *fpmap;
-	off_t begin, end;
+	uint64_t begin, end;
 	size_t pages = 0, pages_touched = 0;
 	bool has_maps = false;
+
+	if (pid == getpid())
+		return 0;
 
 	snprintf(path, sizeof(path), "/proc/%d/mem", pid);
 	fdmem = open(path, O_RDONLY);
@@ -153,19 +244,46 @@ static int pagein_proc(
 	 * Look for field 0060b000-0060c000 r--p 0000b000 08:01 1901726
 	 */
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
-		off_t off;
+		uint64_t off;
 		uint8_t byte;
+		void *mapped = MAP_FAILED;
+		char path[1024];
+		char prot[5];
 
-		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64, &begin, &end) != 2)
+		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64 " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
 			continue;
 		if ((begin >= end) || (begin == end))
 			continue;
 
+		if ((*path || *path == '/') && not_in_pagein(mappings, begin, end, path)) {
+			int fd;
+			int prot_flags = 0;
+			struct stat statbuf;
+
+			fd = open(path, O_RDONLY | O_NONBLOCK);
+			if (fd >= 0) {
+				if ((fstat(fd, &statbuf) == 0) &&
+				    (S_ISREG(statbuf.st_mode))) {
+					if (index(prot, 'r'))
+						prot_flags |= PROT_READ;
+					if (index(prot, 'w'))
+						prot_flags |= PROT_WRITE;
+					if (index(prot, 'x'))
+						prot_flags |= PROT_EXEC;
+					mapped = mmap((void *)begin, end - begin,
+						prot_flags,
+						MAP_FIXED | MAP_SHARED,
+						fd, 0);
+				}
+				(void)close(fd);
+			}
+		}
 		has_maps = true;
 		if (opt_flags & OPT_TRACE_ATTACH) {
 			(void)ptrace(PTRACE_ATTACH, pid, NULL, NULL);
 			(void)waitpid(pid, NULL, 0);
 		}
+
 		for (off = begin; off < end; off += page_size, pages++) {
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
 				continue;
@@ -175,6 +293,8 @@ static int pagein_proc(
 		if (opt_flags & OPT_TRACE_ATTACH) {
 			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		}
+		if (mapped != MAP_FAILED)
+			(void)munmap((void *)begin, end - begin);
 	}
 
 	/*
@@ -189,10 +309,10 @@ static int pagein_proc(
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
-		printf("PID:%5d, %12zu pages, %12zu pages touched\r", pid, pages, *total_pages_touched);
+		printf("PID:%5d, %12zu pages, %12zu pages touched\r", pid, pages,
+			*total_pages_touched);
 		fflush(stdout);
 	}
-	
 	(void)fclose(fpmap);
 	(void)close(fdmem);
 
@@ -204,6 +324,7 @@ static int pagein_proc(
  *	attempt to page in all processes
  */
 static int pagein_all_procs(
+	const mapping_t *mappings,
 	const int32_t page_size,
 	int32_t *const procs,
 	int32_t *const kthreads,
@@ -223,7 +344,7 @@ static int pagein_all_procs(
 		if (isdigit(d->d_name[0]) &&
                     sscanf(d->d_name, "%d", &pid) == 1) {
 			*total_procs += 1;
-			pagein_proc(page_size, pid, procs, kthreads,
+			pagein_proc(mappings, page_size, pid, procs, kthreads,
 				total_pages_touched);
 		}
 	}
@@ -244,6 +365,7 @@ int main(int argc, char **argv)
 	const int32_t scale = page_size / 1024;
 	struct rusage usage;
 	pid_t pid = -1;
+	mapping_t *mappings;
 
 	for (;;) {
 		int c = getopt(argc, argv, "adhp:tv");
@@ -263,7 +385,7 @@ int main(int argc, char **argv)
 			pid = atoi(optarg);
 			if (pid < 1) {
 				fprintf(stderr, "bad pid: %d\n", pid);
-				exit(EXIT_FAILURE);	
+				exit(EXIT_FAILURE);
 			}
 			break;
 		case 't':
@@ -288,19 +410,26 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	mappings = get_pagein_mappings();
+	if (!mappings) {
+		fprintf(stderr, "cannot read pagein's own mappings\n");
+		exit(EXIT_FAILURE);
+	}
+
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
-		pagein_all_procs(page_size, &procs, &kthreads, &total_procs,
+		pagein_all_procs(mappings, page_size, &procs, &kthreads, &total_procs,
 			&total_pages_touched);
 
 	if (opt_flags & OPT_BY_PID) {
 		int ret;
 
-		ret = pagein_proc(page_size, pid, &procs, &kthreads,
+		ret = pagein_proc(mappings, page_size, pid, &procs, &kthreads,
 			&total_pages_touched);
 		if (ret < 0) {
 			fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
+			free_pagein_mappings(mappings);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -310,22 +439,23 @@ int main(int argc, char **argv)
 		printf("%-60.60s\r", "");
 
 	if (opt_flags & OPT_ALL) {
-		printf("Processes scanned:    %" PRIu32 "\n", total_procs);
-		printf("Kernel threads:       %" PRIu32 " (skipped)\n", kthreads);
-		printf("Processes touched:    %" PRIu32 "\n", procs);
+		printf("Processes scanned:     %" PRIu32 "\n", total_procs);
+		printf("Kernel threads:        %" PRIu32 " (skipped)\n", kthreads);
+		printf("Processes touched:     %" PRIu32 "\n", procs);
 	}
-	printf("Pages touched:        %" PRIu64 "\n", total_pages_touched);
+	printf("Pages touched:         %" PRIu64 "\n", total_pages_touched);
 	delta = memfree_begin - memfree_end;
-	printf("Free memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
+	printf("Free memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
 		delta, delta / scale);
 	delta = swapfree_begin - swapfree_end;
-	printf("Swap memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
+	printf("Swap memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
 		delta, delta / scale);
 	if (getrusage(RUSAGE_SELF, &usage) == 0) {
-		printf("Page faults major:    %lu\n", usage.ru_majflt);
-		printf("Page faults minor:    %lu\n", usage.ru_minflt);
-		printf("Swaps:                %lu\n", usage.ru_nswap);
+		printf("Page faults major:     %lu\n", usage.ru_majflt);
+		printf("Page faults minor:     %lu\n", usage.ru_minflt);
+		printf("Swaps:                 %lu\n", usage.ru_nswap);
 	}
+	free_pagein_mappings(mappings);
 
 	return EXIT_SUCCESS;
 }
