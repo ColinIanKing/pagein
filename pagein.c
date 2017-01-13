@@ -125,8 +125,8 @@ static void show_help(void)
 static int pagein_proc(
 	const int32_t page_size,
 	const pid_t pid,
-	const int64_t swapfree_begin,
 	int32_t *const procs,
+	int32_t *const kthreads,
 	int64_t *const total_pages_touched)
 {
 	char path[PATH_MAX];
@@ -153,7 +153,6 @@ static int pagein_proc(
 	 * Look for field 0060b000-0060c000 r--p 0000b000 08:01 1901726
 	 */
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
-		int64_t memfree, swapfree;
 		off_t off;
 		uint8_t byte;
 
@@ -176,10 +175,6 @@ static int pagein_proc(
 		if (opt_flags & OPT_TRACE_ATTACH) {
 			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		}
-		if (!get_memstats(&memfree, &swapfree) &&
-		    swapfree < swapfree_begin) {
-			break;
-		}
 	}
 
 	/*
@@ -189,6 +184,8 @@ static int pagein_proc(
 	if (has_maps) {
 		*procs += 1;
 		*total_pages_touched += pages_touched;
+	} else {
+		*kthreads += 1;
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
@@ -208,8 +205,8 @@ static int pagein_proc(
  */
 static int pagein_all_procs(
 	const int32_t page_size,
-	const int64_t swapfree_begin,	
 	int32_t *const procs,
+	int32_t *const kthreads,
 	int32_t *const total_procs,
 	int64_t *const total_pages_touched)
 {
@@ -226,8 +223,8 @@ static int pagein_all_procs(
 		if (isdigit(d->d_name[0]) &&
                     sscanf(d->d_name, "%d", &pid) == 1) {
 			*total_procs += 1;
-			pagein_proc(page_size, pid, swapfree_begin,
-				procs, total_pages_touched);
+			pagein_proc(page_size, pid, procs, kthreads,
+				total_pages_touched);
 		}
 	}
 
@@ -242,7 +239,7 @@ int main(int argc, char **argv)
 	int64_t swapfree_begin, swapfree_end;
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
-	int32_t procs = 0, total_procs = 0;
+	int32_t procs = 0, total_procs = 0, kthreads = 0;
 	const int32_t page_size = get_page_size();
 	const int32_t scale = page_size / 1024;
 	struct rusage usage;
@@ -293,12 +290,13 @@ int main(int argc, char **argv)
 
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
-		pagein_all_procs(page_size, swapfree_begin, &procs, &total_procs, &total_pages_touched);
+		pagein_all_procs(page_size, &procs, &kthreads, &total_procs,
+			&total_pages_touched);
 
 	if (opt_flags & OPT_BY_PID) {
 		int ret;
 
-		ret = pagein_proc(page_size, pid, swapfree_begin, &procs,
+		ret = pagein_proc(page_size, pid, &procs, &kthreads,
 			&total_pages_touched);
 		if (ret < 0) {
 			fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
@@ -311,8 +309,11 @@ int main(int argc, char **argv)
 	if (opt_flags & OPT_VERBOSE)
 		printf("%-60.60s\r", "");
 
-	if (opt_flags & OPT_ALL)
-		printf("Processes touched:    %" PRIu32 " (out of %" PRIu32 ")\n", procs, total_procs);
+	if (opt_flags & OPT_ALL) {
+		printf("Processes scanned:    %" PRIu32 "\n", total_procs);
+		printf("Kernel threads:       %" PRIu32 " (skipped)\n", kthreads);
+		printf("Processes touched:    %" PRIu32 "\n", procs);
+	}
 	printf("Pages touched:        %" PRIu64 "\n", total_pages_touched);
 	delta = memfree_begin - memfree_end;
 	printf("Free memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
