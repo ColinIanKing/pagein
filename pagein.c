@@ -124,7 +124,6 @@ static void show_help(void)
 	printf("-t\tattach/detatch using ptrace each process being paged in\n");
 	printf("-v\tverbose mode\n");
 	printf("Note: to page in all processes, run with root privilege\n");
-
 }
 
 /*
@@ -162,7 +161,8 @@ static mapping_t *get_pagein_mappings(void)
 		uint64_t begin, end;
 		char path[1024];
 
-		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64 " %*s %*x %*x:%*x %*d %1023s", &begin, &end, path) != 3)
+		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
+			   " %*s %*x %*x:%*x %*d %1023s", &begin, &end, path) != 3)
 			continue;
 		if ((begin >= end) || (begin == end))
 			continue;
@@ -191,19 +191,83 @@ nomem:
 	return NULL;
 }
 
-bool not_in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
+/*
+ *  in_pagein()
+ *	is the mapping also in the pagein process space?
+ */
+static bool in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
 {
 	const mapping_t *mapping;
 
 	for (mapping = mappings; mapping; mapping = mapping->next) {
 		if (!strcmp(mapping->path, path))
-			return false;
+			return true;
 		if ((begin < mapping->begin && end < mapping->begin) ||
 		    (begin > mapping->end   && end > mapping->end))
 			continue;
-		return false;
+		return true;
 	}
-	return true;
+	return false;
+}
+
+/*
+ *  pagein_proc_mmap()
+ *	try to mmap and touch pages
+ */
+static void *pagein_proc_mmap(
+	const mapping_t *mappings,
+	const int32_t page_size,
+	const uint64_t begin,
+	const uint64_t end,
+	char *path,
+	char *prot,
+	size_t *pages_touched)
+{
+	int fd;
+	int prot_flags;
+	struct stat statbuf;
+	void *mapped;
+	uint64_t off;
+
+	if (*path != '/')
+		return NULL;
+	if (in_pagein(mappings, begin, end, path))
+		return NULL;
+	if ((fd = open(path, O_RDONLY | O_NONBLOCK)) < 0)
+		return NULL;
+	if (fstat(fd, &statbuf) < 0)
+		goto err;
+	if (!(S_ISREG(statbuf.st_mode)))
+		goto err;
+
+	prot_flags = 0;
+	if (index(prot, 'r'))
+		prot_flags |= PROT_READ;
+	if (index(prot, 'w'))
+		prot_flags |= PROT_WRITE;
+	if (index(prot, 'x'))
+		prot_flags |= PROT_EXEC;
+	if (!prot_flags)
+		goto err;
+
+	mapped = mmap((void *)(ptrdiff_t)begin, end - begin, prot_flags,
+			MAP_FIXED | MAP_PRIVATE | MAP_POPULATE, fd, 0);
+	if (mapped == MAP_FAILED)
+		goto err;
+	(void)madvise((void*)(ptrdiff_t)begin, end - begin, MADV_WILLNEED);
+	if (prot_flags & PROT_READ) {
+		unsigned char x = 0;
+		for (off = begin; off < end; off += page_size) {
+			volatile char *ptr = (volatile char *)off;
+			x += *ptr;
+			(*pages_touched)++;
+		}
+	} 
+	(void)close(fd);
+	return mapped;
+err:
+	(void)close(fd);
+	return NULL;
 }
 
 /*
@@ -247,45 +311,32 @@ static int pagein_proc(
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
 		uint64_t off;
 		uint8_t byte;
-		void *mapped = MAP_FAILED;
+		void *mapped = NULL;
 		char path[1024];
 		char prot[5];
 
-		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64 " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
+		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
+			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
 			continue;
 		if ((begin >= end) || (begin == end))
 			continue;
 
-		if ((*path || *path == '/') && not_in_pagein(mappings, begin, end, path)) {
-			int fd;
-			int prot_flags = 0;
-			struct stat statbuf;
+		mapped = pagein_proc_mmap(mappings, page_size,
+				begin, end, path, prot, &pages_touched);
 
-			fd = open(path, O_RDONLY | O_NONBLOCK);
-			if (fd >= 0) {
-				if ((fstat(fd, &statbuf) == 0) &&
-				    (S_ISREG(statbuf.st_mode))) {
-					if (index(prot, 'r'))
-						prot_flags |= PROT_READ;
-					if (index(prot, 'w'))
-						prot_flags |= PROT_WRITE;
-					if (index(prot, 'x'))
-						prot_flags |= PROT_EXEC;
-					mapped = mmap((void *)(ptrdiff_t)begin, end - begin,
-						prot_flags,
-						MAP_FIXED | MAP_SHARED,
-						fd, 0);
-				}
-				(void)close(fd);
-			}
-		}
 		has_maps = true;
 		if (opt_flags & OPT_TRACE_ATTACH) {
 			(void)ptrace(PTRACE_ATTACH, pid, NULL, NULL);
 			(void)waitpid(pid, NULL, 0);
 		}
-
 		for (off = begin; off < end; off += page_size, pages++) {
+			unsigned char vec;
+
+			/* In core? no need to touch */
+			if (mapped &&
+			    (mincore((void*)(ptrdiff_t)off, 1, &vec) == 0) &&
+			    (vec & 1))
+				continue;
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
 				continue;
 			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte))
@@ -294,8 +345,9 @@ static int pagein_proc(
 		if (opt_flags & OPT_TRACE_ATTACH) {
 			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		}
-		if (mapped != MAP_FAILED)
+		if (mapped) {
 			(void)munmap((void *)(ptrdiff_t)begin, end - begin);
+		}
 	}
 
 	/*
