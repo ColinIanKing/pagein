@@ -17,6 +17,7 @@
  */
 
 #include <stdio.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -270,7 +271,7 @@ static int pagein_proc(
 						prot_flags |= PROT_WRITE;
 					if (index(prot, 'x'))
 						prot_flags |= PROT_EXEC;
-					mapped = mmap((void *)begin, end - begin,
+					mapped = mmap((void *)(ptrdiff_t)begin, end - begin,
 						prot_flags,
 						MAP_FIXED | MAP_SHARED,
 						fd, 0);
@@ -294,7 +295,7 @@ static int pagein_proc(
 			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		}
 		if (mapped != MAP_FAILED)
-			(void)munmap((void *)begin, end - begin);
+			(void)munmap((void *)(ptrdiff_t)begin, end - begin);
 	}
 
 	/*
@@ -309,7 +310,7 @@ static int pagein_proc(
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
-		printf("PID:%5d, %12zu pages, %12zu pages touched\r", pid, pages,
+		printf("PID:%5d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
 			*total_pages_touched);
 		fflush(stdout);
 	}
