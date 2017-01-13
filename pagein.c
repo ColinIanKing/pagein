@@ -49,21 +49,17 @@
 static uint16_t		opt_flags = 0;
 
 /*
- *  get_pagesize()
- *	get pagesize
+ *  get_page_size()
+ *	get page size
  */
-static size_t get_pagesize(void)
+static int32_t get_page_size(void)
 {
+	int32_t page_size;
 #ifdef _SC_PAGESIZE
-	long sz;
-#endif
-	static size_t page_size = 0;
-	if (page_size > 0)
-		return page_size;
+	int32_t sz;
 
-#ifdef _SC_PAGESIZE
 	sz = sysconf(_SC_PAGESIZE);
-	page_size = (sz <= 0) ? PAGE_4K : (size_t)sz;
+	page_size = (sz <= 0) ? PAGE_4K : sz;
 #else
 	page_size = PAGE_4K;
 #endif
@@ -89,12 +85,12 @@ static int get_memstats(int64_t *memfree, int64_t *swapfree)
 
 	while (fgets(buffer, sizeof(buffer), fp)) {
 		if ((strstr(buffer, "MemFree:")) &&
-		    (sscanf(buffer, "%*s %" SCNu64, memfree) == 1)) {
+		    (sscanf(buffer, "%*s %" SCNd64, memfree) == 1)) {
 			got |= GOT_MEMFREE;
 			continue;
 		}
 		if ((strstr(buffer, "SwapFree:")) &&
-		    (sscanf(buffer, "%*s %" SCNu64, swapfree) == 1)) {
+		    (sscanf(buffer, "%*s %" SCNd64, swapfree) == 1)) {
 			got |= GOT_SWAPFREE;
 		}
 		if ((got & GOT_ALL) == GOT_ALL)
@@ -127,6 +123,7 @@ static void show_help(void)
  *	try to force page in pages for a specific process
  */
 static int pagein_proc(
+	const int32_t page_size,
 	const pid_t pid,
 	const int64_t swapfree_begin,
 	int32_t *const procs,
@@ -137,7 +134,6 @@ static int pagein_proc(
 	int fdmem;
 	FILE *fpmap;
 	off_t begin, end;
-	size_t page_size = get_pagesize();
 	size_t pages = 0, pages_touched = 0;
 	bool has_maps = false;
 
@@ -160,9 +156,10 @@ static int pagein_proc(
 		int64_t memfree, swapfree;
 		off_t off;
 		uint8_t byte;
+
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64, &begin, &end) != 2)
 			continue;
-		if (begin >= end)
+		if ((begin >= end) || (begin == end))
 			continue;
 
 		has_maps = true;
@@ -210,6 +207,7 @@ static int pagein_proc(
  *	attempt to page in all processes
  */
 static int pagein_all_procs(
+	const int32_t page_size,
 	const int64_t swapfree_begin,	
 	int32_t *const procs,
 	int32_t *const total_procs,
@@ -228,7 +226,8 @@ static int pagein_all_procs(
 		if (isdigit(d->d_name[0]) &&
                     sscanf(d->d_name, "%d", &pid) == 1) {
 			*total_procs += 1;
-			pagein_proc(pid, swapfree_begin, procs, total_pages_touched);
+			pagein_proc(page_size, pid, swapfree_begin,
+				procs, total_pages_touched);
 		}
 	}
 
@@ -241,8 +240,10 @@ int main(int argc, char **argv)
 {
 	int64_t memfree_begin, memfree_end;
 	int64_t swapfree_begin, swapfree_end;
+	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
 	int32_t procs = 0, total_procs = 0;
+	const int page_size = get_page_size();
 	struct rusage usage;
 	pid_t pid = -1;
 
@@ -291,12 +292,13 @@ int main(int argc, char **argv)
 
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
-		pagein_all_procs(swapfree_begin, &procs, &total_procs, &total_pages_touched);
+		pagein_all_procs(page_size, swapfree_begin, &procs, &total_procs, &total_pages_touched);
 
 	if (opt_flags & OPT_BY_PID) {
 		int ret;
 
-		ret = pagein_proc(pid, swapfree_begin, &procs, &total_pages_touched);
+		ret = pagein_proc(page_size, pid, swapfree_begin, &procs,
+			&total_pages_touched);
 		if (ret < 0) {
 			fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
@@ -311,12 +313,12 @@ int main(int argc, char **argv)
 	if (opt_flags & OPT_ALL)
 		printf("Processes Touched:    %" PRIu32 " (out of %" PRIu32 ")\n", procs, total_procs);
 	printf("Pages Touched:        %" PRIu64 "\n", total_pages_touched);
+	delta = memfree_begin - memfree_end;
 	printf("Free Memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
-		(memfree_begin - memfree_end),
-		1024 * (memfree_begin - memfree_end) / (int64_t)get_pagesize());
+		delta, (delta / page_size) * 1024);
+	delta = swapfree_begin - swapfree_end;
 	printf("Swap Memory decrease: %" PRId64 "K (%" PRId64 " pages)\n",
-		(swapfree_begin - swapfree_end),
-		1024 * (swapfree_begin - swapfree_end) / (int64_t)get_pagesize());
+		delta, (delta / page_size) * 1024);
 	if (getrusage(RUSAGE_SELF, &usage) == 0) {
 		printf("Page Faults Major:    %lu\n", usage.ru_majflt);
 		printf("Page Faults Minor:    %lu\n", usage.ru_minflt);
