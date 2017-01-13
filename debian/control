@@ -1,0 +1,16 @@
+Source: pagein
+Section: admin
+Priority: optional
+Maintainer: Colin King <colin.king@canonical.com>
+Standards-Version: 3.9.8
+Build-Depends: debhelper (>= 9)
+Homepage: http://kernel.ubuntu.com/~cking/pagein
+
+Package: pagemin
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: tool to force swapped out pages to be resident in memory
+ pagein will attempt to swap in pages that are currently swapped out
+ to make the pages resident in memory. It is mainly useful for testing
+ the VM subsystem.
+
