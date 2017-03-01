@@ -1,3 +1,14 @@
+pagein (0.00.02-1) unstable; urgency=medium
+
+  * Initial Debian release (Closes: #856462)
+  * Makefile: bump version
+  * Minor reworking of page in mapping, clean up readability
+  * Fixup some build warnings on 32 bit arches
+  * Makefile: update dist rules to incorporate snapcraft files
+  * Add COPYING file
+
+ -- Colin King <colin.king@canonical.com>  Wed, 1 Mar 2017 10:08:03 +0000
+
 pagein (0.00.01-1) unstable; urgency=medium
 
   * Initial release
