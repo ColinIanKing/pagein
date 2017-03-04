@@ -490,6 +490,9 @@ int main(int argc, char **argv)
 		if (ret < 0) {
 			fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
+			fprintf(stderr, "  Note: this is normally because of ptrace PTRACE_MODE_ATTACH_FSCREDS access\n");
+			fprintf(stderr, "  mode failure of pagein. pagein  needs to be run with the CAP_SYS_PTRACE\n");
+			fprintf(stderr, "  capability (for example, run pagein as root).\n");
 			free_pagein_mappings(mappings);
 			exit(EXIT_FAILURE);
 		}
