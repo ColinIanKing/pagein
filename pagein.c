@@ -262,7 +262,7 @@ static void *pagein_proc_mmap(
 			x += *ptr;
 			(*pages_touched)++;
 		}
-	} 
+	}
 	(void)close(fd);
 	return mapped;
 err:
@@ -284,7 +284,7 @@ static int pagein_proc(
 {
 	char path[PATH_MAX];
 	char buffer[4096];
-	int fdmem;
+	int fdmem, rc = 0;
 	FILE *fpmap;
 	uint64_t begin, end;
 	size_t pages = 0, pages_touched = 0;
@@ -293,16 +293,27 @@ static int pagein_proc(
 	if (pid == getpid())
 		return 0;
 
+	if (opt_flags & OPT_TRACE_ATTACH) {
+		int ret;
+
+		ret = ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+		if (ret < 0)
+			return -errno;
+		(void)waitpid(pid, NULL, 0);
+	}
 	snprintf(path, sizeof(path), "/proc/%d/mem", pid);
 	fdmem = open(path, O_RDONLY);
-	if (fdmem < 0)
-		return -errno;
+	if (fdmem < 0) {
+		rc = -errno;
+		goto err;
+	}
 
 	snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 	fpmap = fopen(path, "r");
 	if (!fpmap) {
-		close(fdmem);
-		return -errno;
+		(void)close(fdmem);
+		rc = -errno;
+		goto err;
 	}
 
 	/*
@@ -325,10 +336,6 @@ static int pagein_proc(
 				begin, end, path, prot, &pages_touched);
 
 		has_maps = true;
-		if (opt_flags & OPT_TRACE_ATTACH) {
-			(void)ptrace(PTRACE_ATTACH, pid, NULL, NULL);
-			(void)waitpid(pid, NULL, 0);
-		}
 		for (off = begin; off < end; off += page_size, pages++) {
 			unsigned char vec;
 
@@ -341,9 +348,6 @@ static int pagein_proc(
 				continue;
 			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte))
 				pages_touched++;
-		}
-		if (opt_flags & OPT_TRACE_ATTACH) {
-			(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 		}
 		if (mapped) {
 			(void)munmap((void *)(ptrdiff_t)begin, end - begin);
@@ -369,7 +373,11 @@ static int pagein_proc(
 	(void)fclose(fpmap);
 	(void)close(fdmem);
 
-	return 0;
+err:
+	if (opt_flags & OPT_TRACE_ATTACH) {
+		(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
+	}
+	return rc;
 }
 
 /*
