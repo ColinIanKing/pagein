@@ -1,6 +1,15 @@
-pagein (0.00.02-1) unstable; urgency=medium
+pagein (0.00.03-1) unstable; urgency=medium
 
   * Initial Debian release (Closes: #856462)
+  * Makefile: bump version
+  * Add more explanation to why access failures can occur
+  * ptrace should be performed before the open of /proc/$pid/mem
+  * Debian/control: fix typo on pagein name
+
+ -- Colin King <colin.king@canonical.com>  Sat, 4 Mar 2017 20:52:33 +0000
+
+pagein (0.00.02-1) unstable; urgency=medium
+
   * Makefile: bump version
   * Minor reworking of page in mapping, clean up readability
   * Fixup some build warnings on 32 bit arches
