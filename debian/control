@@ -6,7 +6,7 @@ Standards-Version: 3.9.8
 Build-Depends: debhelper (>= 9)
 Homepage: http://kernel.ubuntu.com/~cking/pagein
 
-Package: pagemin
+Package: pagein
 Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: tool to force swapped out pages to be resident in memory
