@@ -219,6 +219,7 @@ static void *pagein_proc_mmap(
 	const int32_t page_size,
 	const uint64_t begin,
 	const uint64_t end,
+	const uint64_t len,
 	char *path,
 	char *prot,
 	size_t *pages_touched)
@@ -227,7 +228,7 @@ static void *pagein_proc_mmap(
 	int prot_flags;
 	struct stat statbuf;
 	void *mapped;
-	uint64_t off;
+	uintptr_t off;
 
 	if (*path != '/')
 		return NULL;
@@ -250,11 +251,11 @@ static void *pagein_proc_mmap(
 	if (!prot_flags)
 		goto err;
 
-	mapped = mmap((void *)(ptrdiff_t)begin, end - begin, prot_flags,
-			MAP_FIXED | MAP_PRIVATE | MAP_POPULATE, fd, 0);
+	mapped = mmap((void *)(ptrdiff_t)begin, (size_t)len, prot_flags,
+			MAP_PRIVATE | MAP_POPULATE, fd, 0);
 	if (mapped == MAP_FAILED)
 		goto err;
-	(void)madvise((void*)(ptrdiff_t)begin, end - begin, MADV_WILLNEED);
+	(void)madvise(mapped, (size_t)len, MADV_WILLNEED);
 	if (prot_flags & PROT_READ) {
 		unsigned char x = 0;
 		for (off = begin; off < end; off += page_size) {
@@ -286,7 +287,6 @@ static int pagein_proc(
 	char buffer[4096];
 	int fdmem, rc = 0;
 	FILE *fpmap;
-	uint64_t begin, end;
 	size_t pages = 0, pages_touched = 0;
 	bool has_maps = false;
 
@@ -320,7 +320,8 @@ static int pagein_proc(
 	 * Look for field 0060b000-0060c000 r--p 0000b000 08:01 1901726
 	 */
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
-		uint64_t off;
+		uint64_t begin, end, len;
+		uintptr_t off, off_end;
 		uint8_t byte;
 		void *mapped = NULL;
 		char path[1024];
@@ -332,16 +333,20 @@ static int pagein_proc(
 		if ((begin >= end) || (begin == end))
 			continue;
 
+		len = end - begin;
 		mapped = pagein_proc_mmap(mappings, page_size,
-				begin, end, path, prot, &pages_touched);
+				begin, end, len, path, prot, &pages_touched);
+
+		off = (uintptr_t)mapped;
+		off_end = off + len;
 
 		has_maps = true;
-		for (off = begin; off < end; off += page_size, pages++) {
+		for (; off < off_end; off += page_size, pages++) {
 			unsigned char vec;
 
 			/* In core? no need to touch */
 			if (mapped &&
-			    (mincore((void*)(ptrdiff_t)off, 1, &vec) == 0) &&
+			    (mincore((void*)off, 1, &vec) == 0) &&
 			    (vec & 1))
 				continue;
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
@@ -350,7 +355,7 @@ static int pagein_proc(
 				pages_touched++;
 		}
 		if (mapped) {
-			(void)munmap((void *)(ptrdiff_t)begin, end - begin);
+			(void)munmap(mapped, (size_t)len);
 		}
 	}
 
