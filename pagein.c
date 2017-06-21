@@ -332,10 +332,11 @@ static int pagein_proc(
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
 			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
 			continue;
-		if ((begin >= end) || (begin == end))
+		len = begin - end;
+
+		if ((begin >= end) || (len == 0))
 			continue;
 
-		len = end - begin;
 		mapped = pagein_proc_mmap(mappings, page_size,
 				begin, end, len, path, prot, &pages_touched);
 
