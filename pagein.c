@@ -324,9 +324,9 @@ static int pagein_proc(
 	 */
 	while (fgets(buffer, sizeof(buffer), fpmap)) {
 		uint64_t begin, end, len;
-		uintptr_t off, off_end;
+		uintptr_t off;
 		uint8_t byte;
-		void *mapped = NULL;
+		uint8_t *mapped = NULL, *ptr, *ptr_end;
 		char path[1024];
 		char prot[5];
 
@@ -341,22 +341,23 @@ static int pagein_proc(
 		mapped = pagein_proc_mmap(mappings, page_size,
 				begin, end, len, path, prot, &pages_touched);
 
-		off = (uintptr_t)mapped;
-		off_end = off + len;
+		ptr_end = mapped + len;
 
 		has_maps = true;
-		for (; off < off_end; off += page_size, pages++) {
+		for (off = begin, ptr = mapped; ptr < ptr_end; ptr += page_size, off += page_size, pages++) {
 			unsigned char vec;
 
 			/* In core? no need to touch */
 			if (mapped &&
-			    (mincore((void*)off, 1, &vec) == 0) &&
+			    (mincore((void*)ptr, 1, &vec) == 0) &&
 			    (vec & 1))
 				continue;
 			if (lseek(fdmem, off, SEEK_SET) == (off_t)-1)
 				continue;
 			if (read(fdmem, &byte, sizeof(byte)) == sizeof(byte))
 				pages_touched++;
+			else
+				break;
 		}
 		if (mapped) {
 			(void)munmap(mapped, (size_t)len);
