@@ -35,9 +35,13 @@
 #include <errno.h>
 #include <dirent.h>
 #include <ctype.h>
+#include <setjmp.h>
+#include <signal.h>
 
 #define APP_NAME		"pagein"
 #define PAGE_4K			(4096)
+
+#define STACK_ALIGNMENT		(64)
 
 #define OPT_VERBOSE		(0x00000001)
 #define OPT_ALL			(0x00000002)
@@ -48,14 +52,41 @@
 #define GOT_SWAPFREE		(0x02)
 #define GOT_ALL			(GOT_MEMFREE | GOT_SWAPFREE)
 
-static uint16_t		opt_flags = 0;
-
 typedef struct mapping {
 	uint64_t	begin;
 	uint64_t	end;
 	char		*path;
 	struct mapping *next;
 } mapping_t;
+
+static uint16_t		opt_flags = 0;
+static sigjmp_buf 	jmp_env;
+static uint8_t stack[SIGSTKSZ + STACK_ALIGNMENT];
+
+static void sigsegv_handler(int sig)
+{
+	static bool faulted = false;
+
+	(void)sig;
+
+	if (!faulted) {
+		faulted = true;		/* Don't double fault */
+		siglongjmp(jmp_env, 1);
+	}
+}
+
+
+/*
+ *  align_address
+ *	align address to alignment, alignment MUST be a power of 2
+ */
+void *align_address(const void *addr, const size_t alignment)
+{
+	const uintptr_t uintptr =
+		((uintptr_t)addr + alignment) & ~(alignment - 1);
+
+	return (void *)uintptr;
+}
 
 /*
  *  get_page_size()
@@ -230,6 +261,7 @@ static void *pagein_proc_mmap(
 	void *mapped;
 	volatile uint8_t *ptr;
 	uint8_t *mapped_end;
+	unsigned char x = 0;
 
 	if (*path != '/')
 		return NULL;
@@ -252,21 +284,20 @@ static void *pagein_proc_mmap(
 	if (!prot_flags)
 		goto err;
 
-	mapped = mmap((void *)(ptrdiff_t)begin, (size_t)len, prot_flags,
-			MAP_PRIVATE | MAP_POPULATE, fd, 0);
+	mapped = mmap(NULL, (size_t)len, prot_flags,
+			MAP_SHARED | MAP_POPULATE, fd, 0);
 	if (mapped == MAP_FAILED)
 		goto err;
 	mapped_end = mapped + len;
 
 	(void)madvise(mapped, (size_t)len, MADV_WILLNEED);
 	if (prot_flags & PROT_READ) {
-		unsigned char x = 0;
-
 		for (ptr = mapped; ptr < mapped_end; ptr += page_size) {
 			x += *ptr;
 		}
 		*pages_touched += len / page_size;
 	}
+	(void)x;
 	(void)close(fd);
 	return mapped;
 err:
@@ -333,7 +364,7 @@ static int pagein_proc(
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
 			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
 			continue;
-		len = begin - end;
+		len = end - begin;
 
 		if ((begin >= end) || (len == 0))
 			continue;
@@ -431,12 +462,15 @@ int main(int argc, char **argv)
 	int64_t swapfree_begin, swapfree_end;
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
-	int32_t procs = 0, total_procs = 0, kthreads = 0;
+	static int32_t total_procs = 0;		/* static noclobber */
+	int32_t procs = 0, kthreads = 0;
 	const int32_t page_size = get_page_size();
 	const int32_t scale = page_size / 1024;
-	struct rusage usage;
-	pid_t pid = -1;
+	static pid_t pid = -1;			/* static noclobber */
 	mapping_t *mappings;
+	struct rusage usage;
+	struct sigaction action;
+	stack_t ss;
 
 	for (;;) {
 		int c = getopt(argc, argv, "adhp:tv");
@@ -487,6 +521,29 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	if (sigsetjmp(jmp_env, 1) == 1) {
+		printf("Aborted early, hit a page fault\n");
+		goto finish;
+		exit(EXIT_FAILURE);
+	}
+
+	ss.ss_sp = align_address(&stack, STACK_ALIGNMENT);
+	ss.ss_size = SIGSTKSZ;
+	ss.ss_flags = 0;
+	if (sigaltstack(&ss, NULL) < 0) {
+		fprintf(stderr, "cannot set sigaltstack stack\n");
+		exit(EXIT_FAILURE);
+	}
+	(void)memset(&action, 0, sizeof(action));
+	(void)sigemptyset(&action.sa_mask);
+	action.sa_handler = sigsegv_handler;
+	action.sa_flags = SA_ONSTACK;
+
+	if (sigaction(SIGSEGV, &action, NULL) < 0) {
+		fprintf(stderr, "cannot set signal handler\n");
+		exit(EXIT_FAILURE);
+	}
+		
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
 		pagein_all_procs(mappings, page_size, &procs, &kthreads, &total_procs,
@@ -512,6 +569,7 @@ int main(int argc, char **argv)
 	if (opt_flags & OPT_VERBOSE)
 		printf("%-60.60s\r", "");
 
+finish:
 	if (opt_flags & OPT_ALL) {
 		printf("Processes scanned:     %" PRIu32 "\n", total_procs);
 		printf("Kernel threads:        %" PRIu32 " (skipped)\n", kthreads);
