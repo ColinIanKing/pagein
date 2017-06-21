@@ -228,7 +228,8 @@ static void *pagein_proc_mmap(
 	int prot_flags;
 	struct stat statbuf;
 	void *mapped;
-	uintptr_t off;
+	volatile uint8_t *ptr;
+	uint8_t *mapped_end;
 
 	if (*path != '/')
 		return NULL;
@@ -255,11 +256,12 @@ static void *pagein_proc_mmap(
 			MAP_PRIVATE | MAP_POPULATE, fd, 0);
 	if (mapped == MAP_FAILED)
 		goto err;
+	mapped_end = mapped + len;
+
 	(void)madvise(mapped, (size_t)len, MADV_WILLNEED);
 	if (prot_flags & PROT_READ) {
 		unsigned char x = 0;
-		for (off = begin; off < end; off += page_size) {
-			volatile char *ptr = (volatile char *)off;
+		for (ptr = mapped; ptr < mapped_end; ptr += page_size) {
 			x += *ptr;
 			(*pages_touched)++;
 		}
