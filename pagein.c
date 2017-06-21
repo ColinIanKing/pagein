@@ -524,7 +524,6 @@ int main(int argc, char **argv)
 	if (sigsetjmp(jmp_env, 1) == 1) {
 		printf("Aborted early, hit a page fault\n");
 		goto finish;
-		exit(EXIT_FAILURE);
 	}
 
 	ss.ss_sp = align_address(&stack, STACK_ALIGNMENT);
