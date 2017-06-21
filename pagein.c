@@ -261,10 +261,11 @@ static void *pagein_proc_mmap(
 	(void)madvise(mapped, (size_t)len, MADV_WILLNEED);
 	if (prot_flags & PROT_READ) {
 		unsigned char x = 0;
+
 		for (ptr = mapped; ptr < mapped_end; ptr += page_size) {
 			x += *ptr;
-			(*pages_touched)++;
 		}
+		*pages_touched += len / page_size;
 	}
 	(void)close(fd);
 	return mapped;
