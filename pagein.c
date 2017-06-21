@@ -285,7 +285,7 @@ static void *pagein_proc_mmap(
 		goto err;
 
 	mapped = mmap(NULL, (size_t)len, prot_flags,
-			MAP_SHARED | MAP_POPULATE, fd, 0);
+			MAP_PRIVATE | MAP_POPULATE, fd, 0);
 	if (mapped == MAP_FAILED)
 		goto err;
 	mapped_end = mapped + len;
