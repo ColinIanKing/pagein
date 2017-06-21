@@ -1,3 +1,18 @@
+pagein (0.00.05-1) unstable; urgency=medium
+
+  * Makefile: bump version again
+  * Debian/control: update standards to 4.0.0
+  * Remove exit after a goto, fixes structurally dead code warning
+  * Make variable sz static so longjmp cannot clobber it
+  * Make file mmapping private
+  * Add SEGV handler and fix length calculation
+  * Seek and read correct page, reference on the non-mmapp'd addresses
+  * Optimize pages touched count
+  * Simplify the zero length check
+  * Fix another segv issue, touch the mapped area
+
+ -- Colin King <colin.king@canonical.com>  Wed, 21 Jun 2017 08:26:18 +0100
+
 pagein (0.00.04-1) unstable; urgency=medium
   
   * Makefile: bump version
