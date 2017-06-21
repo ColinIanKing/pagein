@@ -96,7 +96,7 @@ static int32_t get_page_size(void)
 {
 	int32_t page_size;
 #ifdef _SC_PAGESIZE
-	int32_t sz;
+	static int32_t sz;	/* static noclobber */
 
 	sz = sysconf(_SC_PAGESIZE);
 	page_size = (sz <= 0) ? PAGE_4K : sz;
