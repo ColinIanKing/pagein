@@ -80,7 +80,7 @@ static void sigsegv_handler(int sig)
  *  align_address
  *	align address to alignment, alignment MUST be a power of 2
  */
-void *align_address(const void *addr, const size_t alignment)
+static void *align_address(const void *addr, const size_t alignment)
 {
 	const uintptr_t uintptr =
 		((uintptr_t)addr + alignment) & ~(alignment - 1);
