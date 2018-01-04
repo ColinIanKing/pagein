@@ -358,11 +358,11 @@ static int pagein_proc(
 		uintptr_t off;
 		uint8_t byte;
 		uint8_t *mapped = NULL, *ptr, *ptr_end;
-		char path[1024];
+		char tmppath[1024];
 		char prot[5];
 
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
-			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, path) != 4)
+			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, tmppath) != 4)
 			continue;
 		len = end - begin;
 
@@ -370,7 +370,7 @@ static int pagein_proc(
 			continue;
 
 		mapped = pagein_proc_mmap(mappings, page_size,
-				begin, end, len, path, prot, &pages_touched);
+				begin, end, len, tmppath, prot, &pages_touched);
 
 		ptr_end = mapped + len;
 
