@@ -1,3 +1,12 @@
+pagein (0.00.06-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Make function align_address static
+  * debian/control: update Standards-Version to 4.1.2
+  * Rename array path to tmppath to avoid name shadowing
+
+ -- Colin King <colin.king@canonical.com>  Thu, 4 Jan 2018 23:59:23 +0000
+
 pagein (0.00.05-1) unstable; urgency=medium
 
   * Makefile: bump version again
@@ -14,7 +23,7 @@ pagein (0.00.05-1) unstable; urgency=medium
  -- Colin King <colin.king@canonical.com>  Wed, 21 Jun 2017 08:26:18 +0100
 
 pagein (0.00.04-1) unstable; urgency=medium
-  
+
   * Makefile: bump version
   * Fix segfault on i386 targets (Closes: #865341)
   * snapcraft: add default app and grade keys
