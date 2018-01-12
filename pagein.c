@@ -110,7 +110,7 @@ static inline int32_t get_page_size(void)
  *  get_memstats()
  *	get some pertinent memory statistics from /proc/meminfo
  */
-static int get_memstats(int64_t *memfree, int64_t *swapfree)
+static int get_memstats(int64_t *const memfree, int64_t *const swapfree)
 {
 	FILE *fp;
 	char buffer[4096];
@@ -161,7 +161,7 @@ static void show_help(void)
  *  free_pagein_mappings()
  *	free mappings information
  */
-static void free_pagein_mappings(mapping_t *mappings)
+static void free_pagein_mappings(mapping_t *const mappings)
 {
 	mapping_t *mapping, *next = NULL;
 
@@ -226,7 +226,11 @@ nomem:
  *  in_pagein()
  *	is the mapping also in the pagein process space?
  */
-static inline bool in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
+static inline bool in_pagein(
+	const mapping_t *mappings,
+	const uint64_t begin,
+	const uint64_t end,
+	const char *path)
 {
 	const mapping_t *mapping;
 
@@ -251,8 +255,8 @@ static void *pagein_proc_mmap(
 	const uint64_t begin,
 	const uint64_t end,
 	const uint64_t len,
-	char *path,
-	char *prot,
+	const char *path,
+	const char *prot,
 	size_t *pages_touched)
 {
 	int fd;
