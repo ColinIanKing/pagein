@@ -80,7 +80,7 @@ static void sigsegv_handler(int sig)
  *  align_address
  *	align address to alignment, alignment MUST be a power of 2
  */
-static void *align_address(const void *addr, const size_t alignment)
+static inline void *align_address(const void *addr, const size_t alignment)
 {
 	const uintptr_t uintptr =
 		((uintptr_t)addr + alignment) & ~(alignment - 1);
@@ -92,7 +92,7 @@ static void *align_address(const void *addr, const size_t alignment)
  *  get_page_size()
  *	get page size
  */
-static int32_t get_page_size(void)
+static inline int32_t get_page_size(void)
 {
 	int32_t page_size;
 #ifdef _SC_PAGESIZE
@@ -137,7 +137,7 @@ static int get_memstats(int64_t *memfree, int64_t *swapfree)
 			break;
 	}
 
-	fclose(fp);
+	(void)fclose(fp);
 	return 0;
 }
 
@@ -147,14 +147,14 @@ static int get_memstats(int64_t *memfree, int64_t *swapfree)
  */
 static void show_help(void)
 {
-	printf(APP_NAME ":\n");
-	printf("Usage: " APP_NAME " [OPTION [ARG]]\n");
-	printf("-a\tpage in pages in all processes\n");
-	printf("-h\tshow help\n");
-	printf("-p pid\tpull in pages on specified process\n");
-	printf("-t\tattach/detatch using ptrace each process being paged in\n");
-	printf("-v\tverbose mode\n");
-	printf("Note: to page in all processes, run with root privilege\n");
+	(void)printf(APP_NAME ":\n");
+	(void)printf("Usage: " APP_NAME " [OPTION [ARG]]\n");
+	(void)printf("-a\tpage in pages in all processes\n");
+	(void)printf("-h\tshow help\n");
+	(void)printf("-p pid\tpull in pages on specified process\n");
+	(void)printf("-t\tattach/detatch using ptrace each process being paged in\n");
+	(void)printf("-v\tverbose mode\n");
+	(void)printf("Note: to page in all processes, run with root privilege\n");
 }
 
 /*
@@ -226,7 +226,7 @@ nomem:
  *  in_pagein()
  *	is the mapping also in the pagein process space?
  */
-static bool in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
+static inline bool in_pagein(const mapping_t *mappings, uint64_t begin, uint64_t end, char *path)
 {
 	const mapping_t *mapping;
 
@@ -335,14 +335,14 @@ static int pagein_proc(
 			return -errno;
 		(void)waitpid(pid, NULL, 0);
 	}
-	snprintf(path, sizeof(path), "/proc/%d/mem", pid);
+	(void)snprintf(path, sizeof(path), "/proc/%d/mem", pid);
 	fdmem = open(path, O_RDONLY);
 	if (fdmem < 0) {
 		rc = -errno;
 		goto err;
 	}
 
-	snprintf(path, sizeof(path), "/proc/%d/maps", pid);
+	(void)snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 	fpmap = fopen(path, "r");
 	if (!fpmap) {
 		(void)close(fdmem);
@@ -407,9 +407,9 @@ static int pagein_proc(
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
-		printf("PID:%5d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
+		(void)printf("PID:%5d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
 			*total_pages_touched);
-		fflush(stdout);
+		(void)fflush(stdout);
 	}
 	(void)fclose(fpmap);
 	(void)close(fdmem);
@@ -489,7 +489,7 @@ int main(int argc, char **argv)
 			opt_flags |= OPT_BY_PID;
 			pid = atoi(optarg);
 			if (pid < 1) {
-				fprintf(stderr, "bad pid: %d\n", pid);
+				(void)fprintf(stderr, "bad pid: %d\n", pid);
 				exit(EXIT_FAILURE);
 			}
 			break;
@@ -507,22 +507,22 @@ int main(int argc, char **argv)
 
 	if ((opt_flags & (OPT_ALL | OPT_BY_PID)) ==
 		(OPT_ALL | OPT_BY_PID)) {
-		fprintf(stderr, "must not use -a and -p options together\n");
+		(void)fprintf(stderr, "must not use -a and -p options together\n");
 		exit(EXIT_FAILURE);
 	}
 	if ((opt_flags & (OPT_ALL | OPT_BY_PID)) == 0) {
-		fprintf(stderr, "must use one of -a or -p, use -h for more details\n");
+		(void)fprintf(stderr, "must use one of -a or -p, use -h for more details\n");
 		exit(EXIT_FAILURE);
 	}
 
 	mappings = get_pagein_mappings();
 	if (!mappings) {
-		fprintf(stderr, "cannot read pagein's own mappings\n");
+		(void)fprintf(stderr, "cannot read pagein's own mappings\n");
 		exit(EXIT_FAILURE);
 	}
 
 	if (sigsetjmp(jmp_env, 1) == 1) {
-		printf("Aborted early, hit a page fault\n");
+		(void)printf("Aborted early, hit a page fault\n");
 		goto finish;
 	}
 
@@ -530,7 +530,7 @@ int main(int argc, char **argv)
 	ss.ss_size = SIGSTKSZ;
 	ss.ss_flags = 0;
 	if (sigaltstack(&ss, NULL) < 0) {
-		fprintf(stderr, "cannot set sigaltstack stack\n");
+		(void)fprintf(stderr, "cannot set sigaltstack stack\n");
 		exit(EXIT_FAILURE);
 	}
 	(void)memset(&action, 0, sizeof(action));
@@ -539,7 +539,7 @@ int main(int argc, char **argv)
 	action.sa_flags = SA_ONSTACK;
 
 	if (sigaction(SIGSEGV, &action, NULL) < 0) {
-		fprintf(stderr, "cannot set signal handler\n");
+		(void)fprintf(stderr, "cannot set signal handler\n");
 		exit(EXIT_FAILURE);
 	}
 		
@@ -554,11 +554,11 @@ int main(int argc, char **argv)
 		ret = pagein_proc(mappings, page_size, pid, &procs, &kthreads,
 			&total_pages_touched);
 		if (ret < 0) {
-			fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
+			(void)fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
-			fprintf(stderr, "  Note: this is normally because of ptrace PTRACE_MODE_ATTACH_FSCREDS access\n");
-			fprintf(stderr, "  mode failure of pagein. pagein  needs to be run with the CAP_SYS_PTRACE\n");
-			fprintf(stderr, "  capability (for example, run pagein as root).\n");
+			(void)fprintf(stderr, "  Note: this is normally because of ptrace PTRACE_MODE_ATTACH_FSCREDS access\n");
+			(void)fprintf(stderr, "  mode failure of pagein. pagein  needs to be run with the CAP_SYS_PTRACE\n");
+			(void)fprintf(stderr, "  capability (for example, run pagein as root).\n");
 			free_pagein_mappings(mappings);
 			exit(EXIT_FAILURE);
 		}
@@ -566,25 +566,25 @@ int main(int argc, char **argv)
 
 	get_memstats(&memfree_end, &swapfree_end);
 	if (opt_flags & OPT_VERBOSE)
-		printf("%-60.60s\r", "");
+		(void)printf("%-60.60s\r", "");
 
 finish:
 	if (opt_flags & OPT_ALL) {
-		printf("Processes scanned:     %" PRIu32 "\n", total_procs);
-		printf("Kernel threads:        %" PRIu32 " (skipped)\n", kthreads);
-		printf("Processes touched:     %" PRIu32 "\n", procs);
+		(void)printf("Processes scanned:     %" PRIu32 "\n", total_procs);
+		(void)printf("Kernel threads:        %" PRIu32 " (skipped)\n", kthreads);
+		(void)printf("Processes touched:     %" PRIu32 "\n", procs);
 	}
-	printf("Pages touched:         %" PRIu64 "\n", total_pages_touched);
+	(void)printf("Pages touched:         %" PRIu64 "\n", total_pages_touched);
 	delta = memfree_begin - memfree_end;
-	printf("Free memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
+	(void)printf("Free memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
 		delta, delta / scale);
 	delta = swapfree_begin - swapfree_end;
-	printf("Swap memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
+	(void)printf("Swap memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
 		delta, delta / scale);
 	if (getrusage(RUSAGE_SELF, &usage) == 0) {
-		printf("Page faults major:     %lu\n", usage.ru_majflt);
-		printf("Page faults minor:     %lu\n", usage.ru_minflt);
-		printf("Swaps:                 %lu\n", usage.ru_nswap);
+		(void)printf("Page faults major:     %lu\n", usage.ru_majflt);
+		(void)printf("Page faults minor:     %lu\n", usage.ru_minflt);
+		(void)printf("Swaps:                 %lu\n", usage.ru_nswap);
 	}
 	free_pagein_mappings(mappings);
 
