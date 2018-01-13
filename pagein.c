@@ -52,9 +52,9 @@
 #define GOT_SWAPFREE		(0x02)
 #define GOT_ALL			(GOT_MEMFREE | GOT_SWAPFREE)
 
-static uint16_t		opt_flags = 0;
+static uint16_t		opt_flags;
 static sigjmp_buf 	jmp_env;
-static uint8_t stack[SIGSTKSZ + STACK_ALIGNMENT];
+static uint8_t		stack[SIGSTKSZ + STACK_ALIGNMENT];
 
 static void sigsegv_handler(int sig)
 {
@@ -169,26 +169,27 @@ static int pagein_proc(
 	if (pid == getpid())
 		return 0;
 
-	ret = ptrace(PTRACE_ATTACH, pid, NULL, NULL);
-	if (ret < 0)
-		return -errno;
-
-	(void)waitpid(pid, NULL, 0);
-
 	(void)snprintf(path, sizeof(path), "/proc/%d/mem", pid);
 	fdmem = open(path, O_RDONLY);
 	if (fdmem < 0) {
 		rc = -errno;
-		goto err;
+		goto err_ret;
 	}
 
 	(void)snprintf(path, sizeof(path), "/proc/%d/maps", pid);
 	fpmap = fopen(path, "r");
 	if (!fpmap) {
-		(void)close(fdmem);
 		rc = -errno;
-		goto err;
+		goto err_close_fdmem;
 	}
+
+	ret = ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+	if (ret < 0) {
+		rc = -errno;
+		goto err_close_all;
+	}
+
+	(void)waitpid(pid, NULL, 0);
 
 	/*
 	 * Look for field 0060b000-0060c000 r--p 0000b000 08:01 1901726
@@ -216,6 +217,7 @@ static int pagein_proc(
 			pages_touched++;
 		}
 	}
+	(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
 
 	/*
 	 *  Kernel threads don't have maps, so don't
@@ -233,11 +235,12 @@ static int pagein_proc(
 			*total_pages_touched);
 		(void)fflush(stdout);
 	}
-	(void)fclose(fpmap);
-	(void)close(fdmem);
 
-err:
-	(void)ptrace(PTRACE_DETACH, pid, NULL, NULL);
+err_close_all:
+	(void)fclose(fpmap);
+err_close_fdmem:
+	(void)close(fdmem);
+err_ret:
 	return rc;
 }
 
