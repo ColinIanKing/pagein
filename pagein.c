@@ -54,7 +54,6 @@
 
 static uint16_t		opt_flags;
 static sigjmp_buf 	jmp_env;
-static uint8_t		stack[SIGSTKSZ + STACK_ALIGNMENT];
 
 static void sigsegv_handler(int sig)
 {
@@ -292,6 +291,7 @@ int main(int argc, char **argv)
 	struct rusage usage;
 	struct sigaction action;
 	stack_t ss;
+	uint8_t	stack[SIGSTKSZ + STACK_ALIGNMENT];
 
 	for (;;) {
 		int c = getopt(argc, argv, "adhp:tvw");
