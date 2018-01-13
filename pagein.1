@@ -24,7 +24,6 @@ pagein \- a tool to force swapped out pages back into memory
 .RI [ \-a ]
 .RI [ \-h ]
 .RI [ \-p\ pid ]
-.RI [ \-t ]
 .RI [ \-v ]
 .br
 
@@ -48,11 +47,6 @@ show help information.
 page in process with process ID pid. Cannot be used with the \-a option.
 Processes not owned by the user need to be paged in by running pagein
 with root privilege.
-.TP
-.B \-t
-attach, page-in pages and then detach on each process being paged in using
-ptrace. In theory this will stop an active process and hence won't allow it
-to change memory mappings during the paging in phase.
 .TP
 .B \-v
 verbose mode, shows progress and paging in statistics, useful with the
