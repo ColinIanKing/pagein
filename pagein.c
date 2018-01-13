@@ -247,7 +247,7 @@ err_ret:
  *  pagein_all_procs()
  *	attempt to page in all processes
  */
-static int pagein_all_procs(
+static inline int pagein_all_procs(
 	const int32_t page_size,
 	int32_t *const procs,
 	int32_t *const kthreads,
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
 			(void)fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
 			(void)fprintf(stderr, "  Note: this is normally because of ptrace PTRACE_MODE_ATTACH_FSCREDS access\n");
-			(void)fprintf(stderr, "  mode failure of pagein. pagein  needs to be run with the CAP_SYS_PTRACE\n");
+			(void)fprintf(stderr, "  mode failure of pagein. pagein needs to be run with the CAP_SYS_PTRACE\n");
 			(void)fprintf(stderr, "  capability (for example, run pagein as root).\n");
 			exit(EXIT_FAILURE);
 		}
