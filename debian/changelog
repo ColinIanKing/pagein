@@ -1,3 +1,16 @@
+pagein (0.01.00-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Remove whitespace in text
+  * Put altstack on main's stack, it is small enough
+  * Make ptrace halt window smaller
+  * Rework, just use ptrace memory peeking to force pages in
+  * Add in some more constifications
+  * Minor code style changes, make some small helper funcs inline too
+  * Update copyright year
+
+ -- Colin King <colin.king@canonical.com>  Sun, 14 Jan 2018 16:21:12 +0000
+
 pagein (0.00.06-1) unstable; urgency=medium
 
   * Makefile: bump version
