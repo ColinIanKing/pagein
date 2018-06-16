@@ -154,9 +154,9 @@ static int pagein_proc(
 	const int32_t page_size,
 	const pid_t pid,
 	int32_t *const procs,
-	int32_t *const kthreads,
 	int64_t *const total_pages_touched,
-	int64_t *const total_pages_skipped)
+	int64_t *const total_pages_skipped,
+	int64_t *const total_mappings)
 {
 	char path[PATH_MAX];
 	char buffer[4096];
@@ -202,6 +202,7 @@ static int pagein_proc(
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
 			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, tmppath) != 4)
 			continue;
+		(*total_mappings)++;
 		len = end - begin;
 		if (prot[0] != 'r' && prot[3] != 'p') {
 			*total_pages_skipped += (len / page_size);
@@ -236,10 +237,8 @@ static int pagein_proc(
 	 *  count these in the stats
 	 */
 	if (has_maps) {
-		*procs += 1;
+		(*procs)++;
 		*total_pages_touched += pages_touched;
-	} else {
-		*kthreads += 1;
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
@@ -263,10 +262,10 @@ err_ret:
 static inline int pagein_all_procs(
 	const int32_t page_size,
 	int32_t *const procs,
-	int32_t *const kthreads,
 	int32_t *const total_procs,
 	int64_t *const total_pages_touched,
-	int64_t *const total_pages_skipped)
+	int64_t *const total_pages_skipped,
+	int64_t *const total_mappings)
 {
 	DIR *dp;
 	struct dirent *d;
@@ -281,8 +280,9 @@ static inline int pagein_all_procs(
 		if (isdigit(d->d_name[0]) &&
                     sscanf(d->d_name, "%d", &pid) == 1) {
 			*total_procs += 1;
-			pagein_proc(page_size, pid, procs, kthreads,
-				total_pages_touched, total_pages_skipped);
+			pagein_proc(page_size, pid, procs,
+				total_pages_touched, total_pages_skipped,
+				total_mappings);
 		}
 	}
 
@@ -298,8 +298,9 @@ int main(int argc, char **argv)
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
 	int64_t total_pages_skipped = 0ULL;
+	int64_t total_mappings = 0ULL;
 	static int32_t total_procs = 0;		/* static noclobber */
-	int32_t procs = 0, kthreads = 0;
+	int32_t procs = 0;
 	const int32_t page_size = get_page_size();
 	const int32_t scale = page_size / 1024;
 	static pid_t pid = -1;			/* static noclobber */
@@ -372,15 +373,16 @@ int main(int argc, char **argv)
 		
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
-		pagein_all_procs(page_size, &procs, &kthreads,
+		pagein_all_procs(page_size, &procs,
 				 &total_procs, &total_pages_touched,
-				 &total_pages_skipped);
+				 &total_pages_skipped, &total_mappings);
 
 	if (opt_flags & OPT_BY_PID) {
 		int ret;
 
-		ret = pagein_proc(page_size, pid, &procs, &kthreads,
-			&total_pages_touched, &total_pages_skipped);
+		ret = pagein_proc(page_size, pid, &procs,
+			&total_pages_touched, &total_pages_skipped,
+			&total_mappings);
 		if (ret < 0) {
 			(void)fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
@@ -398,9 +400,9 @@ int main(int argc, char **argv)
 finish:
 	if (opt_flags & OPT_ALL) {
 		(void)printf("Processes scanned:     %" PRIu32 "\n", total_procs);
-		(void)printf("Kernel threads:        %" PRIu32 " (skipped)\n", kthreads);
 		(void)printf("Processes touched:     %" PRIu32 "\n", procs);
 	}
+	(void)printf("Page mappings visited: %" PRIu64 "\n", total_mappings);
 	(void)printf("Pages touched:         %" PRIu64 "\n", total_pages_touched);
 	(void)printf("Pages skipped:         %" PRIu64 " (unreadable)\n", total_pages_skipped);
 	delta = memfree_begin - memfree_end;
