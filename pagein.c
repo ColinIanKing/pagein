@@ -155,7 +155,8 @@ static int pagein_proc(
 	const pid_t pid,
 	int32_t *const procs,
 	int32_t *const kthreads,
-	int64_t *const total_pages_touched)
+	int64_t *const total_pages_touched,
+	int64_t *const total_pages_skipped)
 {
 	char path[PATH_MAX];
 	char buffer[4096];
@@ -202,6 +203,10 @@ static int pagein_proc(
 			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, tmppath) != 4)
 			continue;
 		len = end - begin;
+		if (prot[0] != 'r' && prot[3] != 'p') {
+			*total_pages_skipped += (len / page_size);
+			continue;
+		}
 
 		if ((begin >= end) || (len == 0))
 			continue;
@@ -260,7 +265,8 @@ static inline int pagein_all_procs(
 	int32_t *const procs,
 	int32_t *const kthreads,
 	int32_t *const total_procs,
-	int64_t *const total_pages_touched)
+	int64_t *const total_pages_touched,
+	int64_t *const total_pages_skipped)
 {
 	DIR *dp;
 	struct dirent *d;
@@ -276,7 +282,7 @@ static inline int pagein_all_procs(
                     sscanf(d->d_name, "%d", &pid) == 1) {
 			*total_procs += 1;
 			pagein_proc(page_size, pid, procs, kthreads,
-				total_pages_touched);
+				total_pages_touched, total_pages_skipped);
 		}
 	}
 
@@ -291,6 +297,7 @@ int main(int argc, char **argv)
 	int64_t swapfree_begin, swapfree_end;
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
+	int64_t total_pages_skipped = 0ULL;
 	static int32_t total_procs = 0;		/* static noclobber */
 	int32_t procs = 0, kthreads = 0;
 	const int32_t page_size = get_page_size();
@@ -365,13 +372,15 @@ int main(int argc, char **argv)
 		
 	get_memstats(&memfree_begin, &swapfree_begin);
 	if (opt_flags & OPT_ALL)
-		pagein_all_procs(page_size, &procs, &kthreads, &total_procs, &total_pages_touched);
+		pagein_all_procs(page_size, &procs, &kthreads,
+				 &total_procs, &total_pages_touched,
+				 &total_pages_skipped);
 
 	if (opt_flags & OPT_BY_PID) {
 		int ret;
 
 		ret = pagein_proc(page_size, pid, &procs, &kthreads,
-			&total_pages_touched);
+			&total_pages_touched, &total_pages_skipped);
 		if (ret < 0) {
 			(void)fprintf(stderr, "cannot page in PID %d errno = %d (%s)\n",
 				pid, -ret, strerror(-ret));
@@ -393,6 +402,7 @@ finish:
 		(void)printf("Processes touched:     %" PRIu32 "\n", procs);
 	}
 	(void)printf("Pages touched:         %" PRIu64 "\n", total_pages_touched);
+	(void)printf("Pages skipped:         %" PRIu64 " (unreadable)\n", total_pages_skipped);
 	delta = memfree_begin - memfree_end;
 	(void)printf("Free memory decrease:  %" PRId64 "K (%" PRId64 " pages)\n",
 		delta, delta / scale);
