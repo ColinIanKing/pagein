@@ -238,7 +238,7 @@ static int pagein_proc(
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
-		(void)printf("PID:%5d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
+		(void)printf("PID:%6d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
 			*total_pages_touched);
 		(void)fflush(stdout);
 	}
