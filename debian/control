@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Colin King <colin.king@canonical.com>
 Standards-Version: 4.1.2
-Build-Depends: debhelper (>= 9)
+Build-Depends: debhelper (>= 11)
 Homepage: http://kernel.ubuntu.com/~cking/pagein
 
 Package: pagein
@@ -13,4 +13,3 @@ Description: tool to force swapped out pages to be resident in memory
  pagein will attempt to swap in pages that are currently swapped out
  to make the pages resident in memory. It is mainly useful for testing
  the VM subsystem.
-
