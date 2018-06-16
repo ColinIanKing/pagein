@@ -46,7 +46,6 @@
 #define OPT_VERBOSE		(0x00000001)
 #define OPT_ALL			(0x00000002)
 #define OPT_BY_PID		(0x00000004)
-#define OPT_TOUCH_WRITEABLE	(0x00000008)
 
 #define GOT_MEMFREE		(0x01)
 #define GOT_SWAPFREE		(0x02)
@@ -211,8 +210,17 @@ static int pagein_proc(
 
 		for (off = begin; off < end; off += page_size, pages++) {
 			unsigned long data;
+			off_t pos;
 
 			(void)ptrace(PTRACE_PEEKDATA, pid, (void *)off, &data);
+			pos = lseek(fdmem, (off_t)off, SEEK_SET);
+			if (pos == (off_t)off) {
+				size_t sz;
+
+				sz = read(fdmem, &data, sizeof data);
+				(void)sz;
+			}
+
 			pages_touched++;
 		}
 	}
@@ -294,7 +302,7 @@ int main(int argc, char **argv)
 	uint8_t	stack[SIGSTKSZ + STACK_ALIGNMENT];
 
 	for (;;) {
-		int c = getopt(argc, argv, "adhp:tvw");
+		int c = getopt(argc, argv, "ahp:v");
 		if (c == -1)
 			break;
 
@@ -316,9 +324,6 @@ int main(int argc, char **argv)
 			break;
 		case 'v':
 			opt_flags |= OPT_VERBOSE;
-			break;
-		case 'w':
-			opt_flags |= OPT_TOUCH_WRITEABLE;
 			break;
 		default:
 			show_help();
