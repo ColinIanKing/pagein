@@ -1,3 +1,17 @@
+pagein (0.01.01-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Remove kthreads stat, add in total mappings stat
+  * Add unreadable skipped pages stats
+  * Expand pid field to 6 digits
+  * Manual: change example to Xorg as a process to page in
+  * Remove defunct command options -d, -t, -w
+  * debian/copyright: use secure URI
+  * debian/control: remove empty line and set debhelper version to >=11
+  * debian/compat: update to 11
+
+ -- Colin King <colin.king@canonical.com>  Sun, 17 Jun 2018 12:07:00 +0100
+
 pagein (0.01.00-1) unstable; urgency=medium
 
   * Makefile: bump version
