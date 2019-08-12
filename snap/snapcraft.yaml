@@ -11,7 +11,7 @@ grade: stable
 parts:
     pagein:
         plugin: make
-        source: ..
+        source: git://github.com/ColinIanKing/pagein
         build-packages:
             - gcc
             - make
