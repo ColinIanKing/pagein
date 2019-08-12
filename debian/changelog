@@ -1,3 +1,11 @@
+pagein (0.01.03-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Debian: update compat to level 12
+  * snapcraft: use automatic versioning
+
+ -- Colin King <colin.king@canonical.com>  Mon, 12 Aug 2019 16:47:25 +0100
+
 pagein (0.01.02-1) unstable; urgency=medium
 
   * Makefile: remove -g flag, bump version
