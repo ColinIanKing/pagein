@@ -33,6 +33,7 @@ export DEB_BUILD_HARDENING=1
 
 BINDIR=/usr/bin
 MANDIR=/usr/share/man/man1
+BASHDIR=/usr/share/bash-completion/completions
 
 pagein: pagein.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@ $(LDFLAGS)
@@ -44,7 +45,7 @@ dist:
 	rm -rf pagein-$(VERSION)
 	mkdir pagein-$(VERSION)
 	cp -rp Makefile pagein.c pagein.1 COPYING snap .travis.yml \
-		pagein-$(VERSION)
+		bash-completion pagein-$(VERSION)
 	tar -zcf pagein-$(VERSION).tar.gz pagein-$(VERSION)
 	rm -rf pagein-$(VERSION)
 
@@ -57,3 +58,5 @@ install: pagein pagein.1.gz
 	cp pagein ${DESTDIR}${BINDIR}
 	mkdir -p ${DESTDIR}${MANDIR}
 	cp pagein.1.gz ${DESTDIR}${MANDIR}
+	mkdir -p ${DESTDIR}${BASHDIR}
+	cp bash-completion/pagein ${DESTDIR}${BASHDIR}
