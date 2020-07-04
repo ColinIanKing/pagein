@@ -1,3 +1,11 @@
+pagein (0.01.05-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Debian/control: update compat to 13, remove compat file,
+    add Rules-Requires-Root rule
+
+ -- Colin King <colin.king@canonical.com>  Sat, 4 Jul 2020 15:39:22 +0100
+
 pagein (0.01.04-1) unstable; urgency=medium
 
   * Makefile: update version
