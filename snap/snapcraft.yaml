@@ -1,17 +1,31 @@
 name: pagein
-version: git
-version-script: |
-    echo $(git describe --tags)
 summary: tool to force swapped out pages back into memory
 description: Pagein is a tool that forces pages that are in swap to be paged in back to memory.  The main usecase for pagein is to exercise the VM and swap subsystems for testing purposes.
 confinement: devmode
 type: app
+base: core18
+assumes: [snapd2.45]
 grade: stable
+adopt-info: pagein
 
 parts:
     pagein:
         plugin: make
-        source: git://github.com/ColinIanKing/pagein
+        source-type: git
+        source: https://github.com/ColinIanKing/pagein
+        override-pull: |
+            snapcraftctl pull
+            description="$(git describe HEAD --tags)"
+            sha=$(echo $description | tr '-' ' ' | awk '{print $NF}')
+            version=${description%$sha}
+            commits=$(git log --oneline | wc -l)
+            date=$(date +'%Y%m%d')
+            if test "$description" = "$sha"
+            then
+                version="$description"
+            else
+                version=$(echo $version$date-$commits-$sha | cut -c1-32)
+            fi
         build-packages:
             - gcc
             - make
