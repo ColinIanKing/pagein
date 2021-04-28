@@ -293,8 +293,8 @@ static inline int pagein_all_procs(
 
 int main(int argc, char **argv)
 {
-	int64_t memfree_begin, memfree_end;
-	int64_t swapfree_begin, swapfree_end;
+	int64_t memfree_begin = 0, memfree_end = 0;
+	int64_t swapfree_begin = 0, swapfree_end = 0;
 	int64_t delta;
 	int64_t total_pages_touched = 0ULL;
 	int64_t total_pages_skipped = 0ULL;
