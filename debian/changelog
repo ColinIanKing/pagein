@@ -1,3 +1,11 @@
+pagein (0.01.08-1) unstable; urgency=medium
+
+  * Debian: update changelog
+  * Makefile: update copyright, bump version
+  * Fix potential array overflow on array prot, make it 1 byte larger
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Wed, 20 Apr 2022 12:01:03 +0100
+
 pagein (0.01.07-1) unstable; urgency=medium
 
   * Makefile: bump version
