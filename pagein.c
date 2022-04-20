@@ -198,7 +198,7 @@ static int pagein_proc(
 		uint64_t begin, end, len;
 		uintptr_t off;
 		char tmppath[1024];
-		char prot[5];
+		char prot[6];
 
 		if (sscanf(buffer, "%" SCNx64 "-%" SCNx64
 			   " %5s %*x %*x:%*x %*d %1023s", &begin, &end, prot, tmppath) != 4)
