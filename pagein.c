@@ -52,6 +52,8 @@
 #define GOT_SWAPFREE		(0x02)
 #define GOT_ALL			(GOT_MEMFREE | GOT_SWAPFREE)
 
+#define COMM_FIELD_SIZE		(16)
+
 static uint16_t		opt_flags;
 static sigjmp_buf 	jmp_env;
 
@@ -65,6 +67,43 @@ static void sigsegv_handler(int sig)
 		faulted = true;		/* Don't double fault */
 		siglongjmp(jmp_env, 1);
 	}
+}
+
+/*
+ *  get_comm()
+ *	get the process comm field data, ensure
+ *	non-printable chars are filtered out
+ */
+static inline char *get_comm(const pid_t pid)
+{
+	char buf[PATH_MAX];
+	int fd;
+	ssize_t ret;
+	static char comm[COMM_FIELD_SIZE + 1];
+	static char unknown[] = "(unknown)";
+	char *ptr;
+
+	(void)snprintf(buf, sizeof(buf), "/proc/%jd/comm", (intmax_t)pid);
+	fd = open(buf, O_RDONLY);
+	if (fd < 0)
+		return unknown;
+	ret = read(fd, comm, COMM_FIELD_SIZE);
+	(void)close(fd);
+	if (ret < 0)
+		return unknown;
+	if (ret > COMM_FIELD_SIZE)
+		ret = COMM_FIELD_SIZE;
+	comm[ret] = '\0';
+
+	for (ptr = comm; *ptr; ptr++) {
+		if (*ptr == '\n') {
+			*ptr = '\0';
+			break;
+		}
+		if (!isprint((int)*ptr))
+			*ptr = ' ';
+	}
+	return comm;
 }
 
 /*
@@ -243,8 +282,9 @@ static int pagein_proc(
 	}
 
 	if (opt_flags & OPT_VERBOSE) {
-		(void)printf("PID:%6d, %12zu pages, %12" PRId64 " pages touched\r", pid, pages,
-			*total_pages_touched);
+		(void)printf("PID:%8jd %-*.*s %12zu pages, %12" PRId64 " pages touched\r",
+			(intmax_t)pid, COMM_FIELD_SIZE, COMM_FIELD_SIZE, get_comm(pid),
+			pages, *total_pages_touched);
 		(void)fflush(stdout);
 	}
 
