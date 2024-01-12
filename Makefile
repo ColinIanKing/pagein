@@ -45,7 +45,7 @@ pagein.1.gz: pagein.1
 dist:
 	rm -rf pagein-$(VERSION)
 	mkdir pagein-$(VERSION)
-	cp -rp Makefile pagein.c pagein.1 COPYING snap .travis.yml \
+	cp -rp Makefile pagein.c pagein.1 COPYING .travis.yml \
 		bash-completion README.md pagein-$(VERSION)
 	tar -zcf pagein-$(VERSION).tar.gz pagein-$(VERSION)
 	rm -rf pagein-$(VERSION)
