@@ -47,12 +47,12 @@ dist:
 	mkdir pagein-$(VERSION)
 	cp -rp Makefile pagein.c pagein.1 COPYING .travis.yml \
 		bash-completion README.md pagein-$(VERSION)
-	tar -zcf pagein-$(VERSION).tar.gz pagein-$(VERSION)
+	tar -Jcf pagein-$(VERSION).tar.xz pagein-$(VERSION)
 	rm -rf pagein-$(VERSION)
 
 clean:
 	rm -f pagein pagein.o pagein.1.gz
-	rm -f pagein-$(VERSION).tar.gz
+	rm -f pagein-$(VERSION).tar.xz
 
 install: pagein pagein.1.gz
 	mkdir -p ${DESTDIR}${BINDIR}
