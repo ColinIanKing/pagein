@@ -1,3 +1,15 @@
+pagein (0.01.10-1) unstable; urgency=medium
+
+  * Makefile: bump version
+  * Makefile: use xz compression on tarball on make dist rule
+  * debian/control: update standards version
+  * Update copyright year
+  * debian/rules: add missing hardening flags
+  * Makefile: remove snap from make dist rule
+  * Remove snapcraft
+
+ -- Colin Ian King <colin.i.king@gmail.com>  Fri, 12 Jan 2024 11:13:32 +0000
+
 pagein (0.01.09-1) unstable; urgency=medium
 
   * Makefile: bump version
