@@ -15,7 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+*/
+
+#define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
 #include <stddef.h>
@@ -256,17 +258,22 @@ static int pagein_proc(
 
 		for (off = begin; off < end; off += page_size, pages++) {
 			unsigned long data;
-			off_t pos;
+			off64_t off64;
 
 			(void)ptrace(PTRACE_PEEKDATA, pid, (void *)off, &data);
-			pos = lseek(fdmem, (off_t)off, SEEK_SET);
-			if (pos == (off_t)off) {
-				size_t sz;
 
-				sz = read(fdmem, &data, sizeof data);
-				(void)sz;
+			off64 = (off64_t)off;
+			if (off64 >= 0)  {
+				off64_t pos64;
+
+				pos64 = lseek64(fdmem, off64, SEEK_SET);
+				if (pos64 == off64) {
+					size_t sz;
+
+					sz = read(fdmem, &data, sizeof data);
+					(void)sz;
+				}
 			}
-
 			pages_touched++;
 		}
 	}
